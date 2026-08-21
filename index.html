@@ -1402,76 +1402,99 @@ function initIndividualLeagueResults() {
 function generateIndividualMatches(gi) {
   const g = [...groups[gi]];
   const n = g.length;
-  const matches = [];
 
-  // 파트너 쌍 식별 (매치 생성 시 참고용)
-  const paired = new Set();
-  g.forEach(p => {
-    const pn = getPartnerName(p.name);
-    if (pn && !paired.has(p.name) && !paired.has(pn)) {
-      const partner = g.find(x => x.name === pn);
-      if (partner) { paired.add(p.name); paired.add(pn); }
-    }
-  });
+  function teamPairKey(p1, p2) {
+    return [p1.name, p2.name].sort().join('+');
+  }
 
-  // 4명으로 2v2 팀 배정: 파트너 우선, 밸런스 차이 ≤ 2, 회전식 다양성
-  // 3가지 조합 중 밸런스가 가장 좋고 아직 안 쓴 조합을 우선 선택
-  function findBestTeams(players4, usedMatchKeys) {
-    const combos = [
+  // 4명으로 2v2 팀 배정: 3가지 조합 생성 (파트너 우선 fix 적용)
+  function getCombos(players4) {
+    const indices = [
       { t1: [0,1], t2: [2,3] },
       { t1: [0,2], t2: [1,3] },
       { t1: [0,3], t2: [1,2] }
     ];
-    const validCombos = combos.map(c => {
+    return indices.map(c => {
       let team1 = { p1: players4[c.t1[0]], p2: players4[c.t1[1]] };
       let team2 = { p1: players4[c.t2[0]], p2: players4[c.t2[1]] };
       [team1, team2] = fixPartnerTeams(team1, team2);
+      const t1key = teamPairKey(team1.p1, team1.p2);
+      const t2key = teamPairKey(team2.p1, team2.p2);
       const bal1 = getBalanceScore(team1.p1) + getBalanceScore(team1.p2);
       const bal2 = getBalanceScore(team2.p1) + getBalanceScore(team2.p2);
       const diff = Math.abs(bal1 - bal2);
-      const t1key = [team1.p1.name, team1.p2.name].sort().join('+');
-      const t2key = [team2.p1.name, team2.p2.name].sort().join('+');
-      const matchKey = [t1key, t2key].sort().join(' vs ');
-      return { team1, team2, diff, matchKey };
+      return { team1, team2, diff, t1key, t2key };
     });
-    // 1순위: diff ≤ 2 + 미사용 조합 (밸런스 + 다양성 모두 만족)
-    let cands = validCombos.filter(c => c.diff <= 2 && !usedMatchKeys.has(c.matchKey));
-    if (cands.length > 0) { cands.sort((a,b) => a.diff - b.diff); return cands[0]; }
-    // 2순위: diff ≤ 2 (재사용 허용, 밸런스 우선)
-    cands = validCombos.filter(c => c.diff <= 2);
-    if (cands.length > 0) { cands.sort((a,b) => a.diff - b.diff); return cands[0]; }
-    // 3순위: 최소 diff (어쩔 수 없는 경우)
-    validCombos.sort((a,b) => a.diff - b.diff);
-    return validCombos[0];
   }
 
+  // 라운드 정의 (휴식 로테이션)
+  let rounds;
   if (n === 4) {
-    // 4인: 3경기, 회전식 라운드 로빈 (매 경기 다른 조합, 밸런스 최적화)
-    const usedMatchKeys = new Set();
-    for (let i = 0; i < 3; i++) {
-      const result = findBestTeams(g, usedMatchKeys);
-      usedMatchKeys.add(result.matchKey);
-      matches.push({ team1: result.team1, team2: result.team2, rest: null });
-    }
-  } else if (n === 5) {
-    // 5인: 5경기, 모든 선수가 1번씩 휴식 (회전식 + 밸런스 최적화)
-    const rotation = [
-      { rest: 4, active: [0,1,2,3] },
-      { rest: 3, active: [0,1,2,4] },
-      { rest: 2, active: [0,1,3,4] },
-      { rest: 1, active: [0,2,3,4] },
-      { rest: 0, active: [1,2,3,4] }
+    rounds = [
+      { rest: null, active: [0,1,2,3] },
+      { rest: null, active: [0,1,2,3] },
+      { rest: null, active: [0,1,2,3] }
     ];
-    const usedMatchKeys = new Set();
-    for (const r of rotation) {
-      const restPlayer = g[r.rest];
-      const active4 = r.active.map(i => g[i]);
-      const result = findBestTeams(active4, usedMatchKeys);
-      usedMatchKeys.add(result.matchKey);
-      matches.push({ team1: result.team1, team2: result.team2, rest: restPlayer });
+  } else if (n === 5) {
+    rounds = [
+      { rest: g[4], active: [0,1,2,3] },
+      { rest: g[3], active: [0,1,2,4] },
+      { rest: g[2], active: [0,1,3,4] },
+      { rest: g[1], active: [0,2,3,4] },
+      { rest: g[0], active: [1,2,3,4] }
+    ];
+  } else {
+    return [];
+  }
+
+  // 각 라운드의 조합 미리 계산
+  const roundCombos = rounds.map(r => {
+    const active4 = r.active.map(i => g[i]);
+    return getCombos(active4);
+  });
+
+  // 백트래킹: 중복 최소화 → 밸런스 최적화 (모든 경기를 동시에 최적화)
+  let bestSolution = null;
+  let bestDupCount = Infinity;
+  let bestTotalDiff = Infinity;
+  const totalRounds = rounds.length;
+
+  function backtrack(roundIdx, usedPairs, currentSolution, dupCount, totalDiff) {
+    // 가지치기: 이미 최적보다 안 좋으면 중단
+    if (dupCount > bestDupCount) return;
+    if (dupCount === bestDupCount && totalDiff >= bestTotalDiff) return;
+
+    if (roundIdx === totalRounds) {
+      if (dupCount < bestDupCount || (dupCount === bestDupCount && totalDiff < bestTotalDiff)) {
+        bestDupCount = dupCount;
+        bestTotalDiff = totalDiff;
+        bestSolution = currentSolution.map(c => ({ ...c }));
+      }
+      return;
+    }
+
+    for (const combo of roundCombos[roundIdx]) {
+      const newDup = (usedPairs.has(combo.t1key) ? 1 : 0) + (usedPairs.has(combo.t2key) ? 1 : 0);
+      const newPairs = new Set(usedPairs);
+      newPairs.add(combo.t1key);
+      newPairs.add(combo.t2key);
+      currentSolution.push(combo);
+      backtrack(roundIdx + 1, newPairs, currentSolution, dupCount + newDup, totalDiff + combo.diff);
+      currentSolution.pop();
     }
   }
-  return matches;
+
+  backtrack(0, new Set(), [], 0, 0);
+
+  if (!bestSolution) {
+    bestSolution = roundCombos.map(rc => rc[0]);
+  }
+
+  return bestSolution.map((combo, i) => ({
+    team1: combo.team1,
+    team2: combo.team2,
+    rest: rounds[i].rest
+  }));
 }
 
 // 파트너가 같은 팀이 되도록 팀원 교환
