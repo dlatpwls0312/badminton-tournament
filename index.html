@@ -279,18 +279,18 @@
     display: flex; align-items: center; gap: 8px;
     padding: 8px 0; border-bottom: 1px solid var(--border);
   }
-  .match-row .vs { color: var(--text-light); font-weight: 600; }
+  .match-row .vs { color: var(--text-light); font-weight: 600; font-size: 1.1em; }
   .match-row .player { flex: 1; font-weight: 600; }
   .match-row .player.win { color: var(--primary); }
   .match-row .score-input {
-    width: 50px; padding: 4px 8px; text-align: center;
-    border: 2px solid var(--border); border-radius: 6px; font-size: 0.9em;
+    width: 70px; padding: 8px 12px; text-align: center;
+    border: 2px solid var(--border); border-radius: 6px; font-size: 1.3em; font-weight: 700;
   }
   .match-row .score-input:focus { border-color: var(--primary); outline: none; }
   .confirm-score-btn {
     display: block; width: 100%; margin-top: 8px;
     padding: 6px 12px; background: var(--primary); color: white;
-    border: none; border-radius: 6px; font-size: 0.85em; font-weight: 700;
+    border: none; border-radius: 6px; font-size: 1em; font-weight: 700;
     cursor: pointer; transition: all 0.2s;
   }
   .confirm-score-btn:hover { background: var(--primary-dark); }
@@ -488,11 +488,11 @@
     .group-table th, .group-table td { padding: 5px 6px; font-size: 0.75em; }
 
     .league-table th, .league-table td { padding: 5px 6px; font-size: 0.75em; }
-    .league-table .score-input { width: 36px; padding: 3px 4px; font-size: 0.8em; }
+    .league-table .score-input { width: 50px; padding: 5px 8px; font-size: 1em; }
 
     .match-row { gap: 4px; padding: 6px 0; flex-wrap: wrap; }
     .match-row .player { font-size: 0.85em; }
-    .match-row .score-input { width: 40px; padding: 3px 6px; font-size: 0.85em; }
+    .match-row .score-input { width: 55px; padding: 5px 8px; font-size: 1em; }
     .confirm-score-btn { padding: 5px 10px; font-size: 0.8em; }
 
     .mode-toggle { flex-direction: column; gap: 8px; }
@@ -561,10 +561,10 @@
 
     .group-table th, .group-table td { padding: 4px 4px; font-size: 0.7em; }
     .league-table th, .league-table td { padding: 4px 4px; font-size: 0.7em; }
-    .league-table .score-input { width: 32px; padding: 2px 4px; font-size: 0.75em; }
+    .league-table .score-input { width: 44px; padding: 4px 6px; font-size: 0.9em; }
 
     .match-row .player { font-size: 0.8em; }
-    .match-row .score-input { width: 36px; font-size: 0.8em; }
+    .match-row .score-input { width: 48px; font-size: 0.95em; }
 
     .bracket-match { min-width: 130px; }
     .bracket-match .bracket-player { padding: 4px 6px; font-size: 0.75em; }
@@ -617,7 +617,14 @@
       <option value="남">남</option>
       <option value="여">여</option>
     </select>
-    <input type="text" id="pYear" placeholder="년도" onkeydown="if(event.key==='Enter')addPlayer()">
+    <input type="text" id="pYear" placeholder="년도" onkeydown="if(event.key==='Enter')document.getElementById('pAssignGroup').focus()">
+    <select id="pAssignGroup">
+      <option value="0">조 자동</option>
+      <option value="1">1조 지정</option>
+      <option value="2">2조 지정</option>
+      <option value="3">3조 지정</option>
+      <option value="4">4조 지정</option>
+    </select>
   </div>
   <div class="input-buttons">
     <button class="btn btn-primary" onclick="addPlayer()">＋ 참가자 추가</button>
@@ -631,7 +638,7 @@
   <div class="participant-scroll" id="participantScroll" style="display:none;">
     <table class="participant-table" id="participantTable">
       <thead>
-        <tr><th>#</th><th style="text-align:left;">이름</th><th>급수</th><th>성별</th><th>년도</th><th>파트너</th><th>관리</th></tr>
+        <tr><th>#</th><th style="text-align:left;">이름</th><th>급수</th><th>성별</th><th>년도</th><th>지정조</th><th>파트너</th><th>관리</th></tr>
       </thead>
       <tbody id="participantBody"></tbody>
     </table>
@@ -754,6 +761,7 @@ function addPlayer() {
   const gradeEl = document.getElementById('pGrade');
   const genderEl = document.getElementById('pGender');
   const yearEl = document.getElementById('pYear');
+  const assignGroupEl = document.getElementById('pAssignGroup');
   const name = nameEl.value.trim();
   if (!name) { alert('이름을 입력하세요.'); nameEl.focus(); return; }
   if (players.some(p => p.name === name)) { alert('이미 존재하는 이름입니다.'); return; }
@@ -761,9 +769,10 @@ function addPlayer() {
     name: name,
     grade: gradeEl.value || '-',
     gender: genderEl.value || '-',
-    year: yearEl.value.trim() || '-'
+    year: yearEl.value.trim() || '-',
+    assignGroup: parseInt(assignGroupEl.value) || 0
   });
-  nameEl.value = ''; gradeEl.value = ''; genderEl.value = ''; yearEl.value = '';
+  nameEl.value = ''; gradeEl.value = ''; genderEl.value = ''; yearEl.value = ''; assignGroupEl.value = '0';
   nameEl.focus();
   sortPlayers(players);
   renderParticipants();
@@ -793,90 +802,14 @@ const DEFAULT_ROSTER = [
 ];
 let dropshotRoster = [];
 try {
-  const saved = localStorage.getItem('dropshotRoster');
+  const saved = localStorage.getItem('dropshot_roster');
   dropshotRoster = saved ? JSON.parse(saved) : JSON.parse(JSON.stringify(DEFAULT_ROSTER));
 } catch(e) { dropshotRoster = JSON.parse(JSON.stringify(DEFAULT_ROSTER)); }
-let rosterDraft = []; // 모달 편집용 임시 배열
 
 function addSamplePlayers() {
-  dropshotRoster.forEach(s => { if (!players.some(p => p.name === s.name)) players.push({...s}); });
+  dropshotRoster.forEach(s => { if (!players.some(p => p.name === s.name)) players.push({...s, assignGroup: s.assignGroup || 0}); });
   sortPlayers(players);
   renderParticipants();
-}
-
-// ===== 드롭샷 인원 조정 모달 =====
-function openRosterModal() {
-  rosterDraft = JSON.parse(JSON.stringify(dropshotRoster));
-  sortPlayers(rosterDraft);
-  document.getElementById('rosterModal').classList.add('show');
-  renderRosterModal();
-}
-
-function closeRosterModal() {
-  document.getElementById('rosterModal').classList.remove('show');
-}
-
-function renderRosterModal() {
-  sortPlayers(rosterDraft);
-  const tbody = document.getElementById('rosterBody');
-  tbody.innerHTML = rosterDraft.map((p, i) => `
-    <tr>
-      <td>${i + 1}</td>
-      <td style="text-align:left;font-weight:600;">${escapeHtml(p.name)}</td>
-      <td>
-        <select class="grade-select" onchange="updateRosterGrade(${i}, this.value)">
-          <option value="S" ${p.grade==='S'?'selected':''}>S</option>
-          <option value="A" ${p.grade==='A'?'selected':''}>A</option>
-          <option value="B" ${p.grade==='B'?'selected':''}>B</option>
-          <option value="C" ${p.grade==='C'?'selected':''}>C</option>
-          <option value="D" ${p.grade==='D'?'selected':''}>D</option>
-          <option value="-" ${p.grade==='-'?'selected':''}>-</option>
-        </select>
-      </td>
-      <td>${p.gender}</td>
-      <td>${p.year}</td>
-      <td><button class="del-btn" onclick="removeRosterPlayer(${i})">삭제</button></td>
-    </tr>
-  `).join('');
-  document.getElementById('rosterCount').textContent = `총 ${rosterDraft.length}명`;
-}
-
-function addRosterPlayer() {
-  const nameEl = document.getElementById('rName');
-  const gradeEl = document.getElementById('rGrade');
-  const genderEl = document.getElementById('rGender');
-  const yearEl = document.getElementById('rYear');
-  const name = nameEl.value.trim();
-  if (!name) { alert('이름을 입력하세요.'); nameEl.focus(); return; }
-  if (rosterDraft.some(p => p.name === name)) { alert('이미 존재하는 이름입니다.'); return; }
-  rosterDraft.push({
-    name: name,
-    grade: gradeEl.value || '-',
-    gender: genderEl.value || '-',
-    year: yearEl.value.trim() || '-'
-  });
-  nameEl.value = ''; gradeEl.value = ''; genderEl.value = ''; yearEl.value = '';
-  nameEl.focus();
-  renderRosterModal();
-}
-
-function removeRosterPlayer(idx) {
-  rosterDraft.splice(idx, 1);
-  renderRosterModal();
-}
-
-function updateRosterGrade(idx, newGrade) {
-  rosterDraft[idx].grade = newGrade;
-  renderRosterModal();
-}
-
-function saveRoster() {
-  if (rosterDraft.length === 0) { alert('최소 1명 이상 필요합니다.'); return; }
-  dropshotRoster = JSON.parse(JSON.stringify(rosterDraft));
-  sortPlayers(dropshotRoster);
-  try { localStorage.setItem('dropshotRoster', JSON.stringify(dropshotRoster)); } catch(e) {}
-  closeRosterModal();
-  alert('드롭샷 인원이 저장되었습니다. (' + dropshotRoster.length + '명)');
 }
 
 function removePlayer(idx) {
@@ -891,6 +824,8 @@ function clearAll() {
   document.getElementById('pGrade').value = '';
   document.getElementById('pGender').value = '';
   document.getElementById('pYear').value = '';
+  const pAssignEl = document.getElementById('pAssignGroup');
+  if (pAssignEl) pAssignEl.value = '0';
   // 모든 상태 초기화
   players = [];
   groups = [];
@@ -933,6 +868,11 @@ function clearAll() {
 function updateGrade(idx, newGrade) {
   players[idx].grade = newGrade;
   sortPlayers(players);
+  renderParticipants();
+}
+
+function updateAssignGroup(idx, val) {
+  players[idx].assignGroup = parseInt(val) || 0;
   renderParticipants();
 }
 
@@ -1106,6 +1046,15 @@ function renderRosterModal() {
       </td>
       <td><input type="text" class="modal-input" value="${escapeHtml(p.year)}"
         onchange="updateRosterField(${i}, 'year', this.value)"></td>
+      <td>
+        <select class="modal-select" onchange="updateRosterField(${i}, 'assignGroup', this.value)">
+          <option value="0" ${(p.assignGroup||0)===0?'selected':''}>자동</option>
+          <option value="1" ${(p.assignGroup||0)===1?'selected':''}>1조</option>
+          <option value="2" ${(p.assignGroup||0)===2?'selected':''}>2조</option>
+          <option value="3" ${(p.assignGroup||0)===3?'selected':''}>3조</option>
+          <option value="4" ${(p.assignGroup||0)===4?'selected':''}>4조</option>
+        </select>
+      </td>
       <td><button class="del-btn" onclick="removeRosterPlayer(${i})">삭제</button></td>
     </tr>
   `).join('');
@@ -1113,7 +1062,11 @@ function renderRosterModal() {
 }
 
 function updateRosterField(idx, field, value) {
-  rosterEditing[idx][field] = value.trim();
+  if (field === 'assignGroup') {
+    rosterEditing[idx][field] = parseInt(value) || 0;
+  } else {
+    rosterEditing[idx][field] = value.trim();
+  }
   if (field === 'grade') { sortPlayers(rosterEditing); renderRosterModal(); }
 }
 
@@ -1123,8 +1076,24 @@ function removeRosterPlayer(idx) {
 }
 
 function addRosterPlayer() {
-  rosterEditing.push({name:'새 선수', grade:'-', gender:'남', year:''});
-  sortPlayers(rosterEditing);
+  const nameEl = document.getElementById('rName');
+  const gradeEl = document.getElementById('rGrade');
+  const genderEl = document.getElementById('rGender');
+  const yearEl = document.getElementById('rYear');
+  const assignEl = document.getElementById('rAssignGroup');
+  const name = nameEl.value.trim();
+  if (!name) { alert('이름을 입력하세요.'); nameEl.focus(); return; }
+  if (rosterEditing.some(p => p.name === name)) { alert('이미 존재하는 이름입니다.'); return; }
+  rosterEditing.push({
+    name: name,
+    grade: gradeEl.value || '-',
+    gender: genderEl.value || '-',
+    year: yearEl.value.trim() || '-',
+    assignGroup: parseInt(assignEl?.value) || 0
+  });
+  nameEl.value = ''; gradeEl.value = ''; genderEl.value = ''; yearEl.value = '';
+  if (assignEl) assignEl.value = '0';
+  nameEl.focus();
   renderRosterModal();
 }
 
@@ -1134,6 +1103,7 @@ function saveRosterAndClose() {
   if (names.some(n => !n)) { alert('이름이 비어있는 선수가 있습니다.'); return; }
   if (new Set(names).size !== names.length) { alert('중복된 이름이 있습니다.'); return; }
   sortPlayers(rosterEditing);
+  dropshotRoster = JSON.parse(JSON.stringify(rosterEditing));
   saveRoster(rosterEditing);
   closeRosterModal();
 }
@@ -1161,6 +1131,15 @@ function renderParticipants() {
         </td>
         <td><span class="${p.gender==='남'?'gender-male':p.gender==='여'?'gender-female':''}">${p.gender}</span></td>
         <td>${p.year}</td>
+        <td>
+          <select class="grade-select" onchange="updateAssignGroup(${i}, this.value)">
+            <option value="0" ${(p.assignGroup||0)===0?'selected':''}>자동</option>
+            <option value="1" ${(p.assignGroup||0)===1?'selected':''}>1조</option>
+            <option value="2" ${(p.assignGroup||0)===2?'selected':''}>2조</option>
+            <option value="3" ${(p.assignGroup||0)===3?'selected':''}>3조</option>
+            <option value="4" ${(p.assignGroup||0)===4?'selected':''}>4조</option>
+          </select>
+        </td>
         <td>${getPartnerName(p.name) ? `<span class="partner-badge">${escapeHtml(getPartnerName(p.name))}</span>` : '<span class="partner-none">-</span>'}</td>
         <td><button class="del-btn" onclick="removePlayer(${i})">삭제</button></td>
       </tr>
@@ -1189,7 +1168,7 @@ function setupGroupCountSelect() {
   groupCount = parseInt(sel.value);
 }
 
-// ===== 조 배정 (랜덤) =====
+// ===== 조 배정 (지정조 우선 + 랜덤) =====
 function assignGroups() {
   groupCount = parseInt(document.getElementById('groupCountSelect').value);
   // 파트너 쌍과 솔로 분리
@@ -1212,26 +1191,57 @@ function assignGroups() {
   shuffleArray(pairUnits);
   shuffleArray(soloUnits);
 
-  if (leagueMode === 'individual' && pairUnits.length > 0) {
+  // 지정 조가 있는 선수/팀을 먼저 배정
+  groups = Array.from({length: groupCount}, () => []);
+  const assignedNames = new Set();
+
+  // 1단계: 지정 조가 있는 파트너 쌍 배정 (둘 중 한 명이라도 지정 조가 있으면)
+  const assignedPairUnits = [];
+  const remainingPairUnits = [];
+  pairUnits.forEach(unit => {
+    const ag1 = unit[0].assignGroup || 0;
+    const ag2 = unit[1].assignGroup || 0;
+    const targetGroup = ag1 || ag2; // 둘 중 지정된 조 (우선 첫 번째)
+    if (targetGroup && targetGroup <= groupCount) {
+      groups[targetGroup - 1].push(...unit);
+      assignedNames.add(unit[0].name); assignedNames.add(unit[1].name);
+    } else {
+      remainingPairUnits.push(unit);
+    }
+  });
+
+  // 2단계: 지정 조가 있는 솔로 배정
+  const remainingSoloUnits = [];
+  soloUnits.forEach(unit => {
+    const ag = unit[0].assignGroup || 0;
+    if (ag && ag <= groupCount) {
+      groups[ag - 1].push(...unit);
+      assignedNames.add(unit[0].name);
+    } else {
+      remainingSoloUnits.push(unit);
+    }
+  });
+
+  // 3단계: 남은 선수/팀을 랜덤 배정 (빈 자리 채우기)
+  if (leagueMode === 'individual' && (remainingPairUnits.length > 0 || remainingSoloUnits.length > 0)) {
     // 개인 대진: 파트너 쌍은 5인조에 배정, 4인조는 솔로만
     const total = players.length;
-    const numFiveGroups = total - 4 * groupCount; // 5인조 개수
-    const numFourGroups = groupCount - numFiveGroups; // 4인조 개수
-    groups = Array.from({length: groupCount}, () => []);
-    // 5인조에 파트너 쌍 균등 배정 (조당 최대 2쌍)
+    const numFiveGroups = total - 4 * groupCount;
+    const numFourGroups = groupCount - numFiveGroups;
+    // 5인조에 남은 파트너 쌍 균등 배정 (조당 최대 2쌍)
     let pairIdx = 0;
     const fiveIndices = Array.from({length: numFiveGroups}, (_, i) => i);
     // 1라운드: 각 5인조에 1쌍씩
     fiveIndices.forEach(gi => {
-      if (pairIdx < pairUnits.length) {
-        groups[gi].push(...pairUnits[pairIdx]);
+      if (pairIdx < remainingPairUnits.length) {
+        groups[gi].push(...remainingPairUnits[pairIdx]);
         pairIdx++;
       }
     });
     // 2라운드: 남은 쌍이 있으면 각 5인조에 1쌍씩 추가
     fiveIndices.forEach(gi => {
-      if (pairIdx < pairUnits.length) {
-        groups[gi].push(...pairUnits[pairIdx]);
+      if (pairIdx < remainingPairUnits.length) {
+        groups[gi].push(...remainingPairUnits[pairIdx]);
         pairIdx++;
       }
     });
@@ -1239,18 +1249,22 @@ function assignGroups() {
     let soloIdx = 0;
     for (let gi = 0; gi < groupCount; gi++) {
       const targetSize = gi < numFiveGroups ? 5 : 4;
-      while (groups[gi].length < targetSize && soloIdx < soloUnits.length) {
-        groups[gi].push(...soloUnits[soloIdx]);
+      while (groups[gi].length < targetSize && soloIdx < remainingSoloUnits.length) {
+        groups[gi].push(...remainingSoloUnits[soloIdx]);
         soloIdx++;
       }
     }
   } else {
-    // 파트너 대진 또는 파트너 없음: 기존 라운드로빈 배정
-    const units = [...pairUnits, ...soloUnits];
+    // 파트너 대진 또는 파트너 없음: 라운드로빈 배정
+    const units = [...remainingPairUnits, ...remainingSoloUnits];
     shuffleArray(units);
-    groups = Array.from({length: groupCount}, () => []);
     for (let i = 0; i < units.length; i++) {
-      groups[i % groupCount].push(...units[i]);
+      // 가장 적은 조에 배정
+      let minGi = 0;
+      for (let gi = 1; gi < groupCount; gi++) {
+        if (groups[gi].length < groups[minGi].length) minGi = gi;
+      }
+      groups[minGi].push(...units[i]);
     }
   }
 }
@@ -1618,9 +1632,9 @@ function renderIndividualLeague() {
               <div style="font-weight:700;color:var(--primary);margin-bottom:8px;">${mi + 1}경기 <span style="font-size:0.85em;color:var(--text-light);font-weight:400;">밸런스: 팀1 [${bal1}점] vs 팀2 [${bal2}점]</span></div>
               <div class="match-row" style="flex-wrap:wrap;gap:8px;">
                 <span class="player ${t1Win ? 'win' : ''}" style="flex:1;min-width:120px;">${t1Names}<br><span style="font-size:0.75em;color:var(--text-light);">${t1Info}</span></span>
-                <input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:50px;">
+                <input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:70px;">
                 <span class="vs">vs</span>
-                <input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:50px;">
+                <input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:70px;">
                 <span class="player ${t2Win ? 'win' : ''}" style="flex:1;min-width:120px;text-align:right;">${t2Names}<br><span style="font-size:0.75em;color:var(--text-light);">${t2Info}</span></span>
               </div>
               <button class="confirm-score-btn" onclick="confirmScore(this)">✅ 점수 입력 완료</button>
@@ -1889,9 +1903,9 @@ function renderCourtSchedule() {
           <div style="font-weight:700;color:var(--primary);margin-bottom:6px;">🏟 코트 ${courtNum} <span style="font-size:0.8em;color:var(--text-light);font-weight:400;">${m.gName} ${m.mi + 1}경기 | 밸런스: [${bal1}] vs [${bal2}]</span></div>
           <div class="match-row" style="flex-wrap:wrap;gap:6px;">
             <span class="player ${t1Win ? 'win' : ''}" style="flex:1;min-width:100px;">${t1Names}<br><span style="font-size:0.7em;color:var(--text-light);">${t1Info}</span></span>
-            <input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:45px;">
+            <input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:65px;">
             <span class="vs">vs</span>
-            <input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:45px;">
+            <input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:65px;">
             <span class="player ${t2Win ? 'win' : ''}" style="flex:1;min-width:100px;text-align:right;">${t2Names}<br><span style="font-size:0.7em;color:var(--text-light);">${t2Info}</span></span>
           </div>
           <button class="confirm-score-btn" onclick="confirmScore(this)">✅ 점수 입력 완료</button>
@@ -2166,15 +2180,17 @@ function renderPartnerLeague() {
             const t1Info = m.t1.members ? m.t1.members.map(mm => `(${mm.grade}/${mm.gender})`).join(' ') : '';
             const t2Info = m.t2.members ? m.t2.members.map(mm => `(${mm.grade}/${mm.gender})`).join(' ') : '';
             html += `
-              <div data-match-card data-type="partner" data-gname="${gName}" data-key="${escapeAttr(key)}" class="match-row">
-                <span style="color:var(--text-light);font-size:0.8em;width:30px;">${ri + 1}-${mi + 1}</span>
-                <span class="player ${t1Win ? 'win' : ''}" style="flex:1;min-width:100px;">${escapeHtml(m.t1.name)}<br><span style="font-size:0.75em;color:var(--text-light);">${t1Info}</span></span>
-                <input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0">
-                <span class="vs">vs</span>
-                <input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0">
-                <span class="player ${t2Win ? 'win' : ''}" style="flex:1;min-width:100px;text-align:right;">${escapeHtml(m.t2.name)}<br><span style="font-size:0.75em;color:var(--text-light);">${t2Info}</span></span>
+              <div data-match-card data-type="partner" data-gname="${gName}" data-key="${escapeAttr(key)}" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0;background:var(--card);">
+                <div class="match-row">
+                  <span style="color:var(--text-light);font-size:0.8em;width:30px;">${ri + 1}-${mi + 1}</span>
+                  <span class="player ${t1Win ? 'win' : ''}" style="flex:1;min-width:100px;">${escapeHtml(m.t1.name)}<br><span style="font-size:0.75em;color:var(--text-light);">${t1Info}</span></span>
+                  <input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0">
+                  <span class="vs">vs</span>
+                  <input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0">
+                  <span class="player ${t2Win ? 'win' : ''}" style="flex:1;min-width:100px;text-align:right;">${escapeHtml(m.t2.name)}<br><span style="font-size:0.75em;color:var(--text-light);">${t2Info}</span></span>
+                </div>
+                <button class="confirm-score-btn" onclick="confirmScore(this)" style="margin-bottom:8px;">✅ 점수 입력 완료</button>
               </div>
-              <button class="confirm-score-btn" onclick="confirmScore(this)" style="margin-bottom:8px;">✅ 점수 입력 완료</button>
             `;
           });
           const actualRest = restTeam || (matches[0] && matches[0].rest) || null;
@@ -2426,9 +2442,9 @@ function renderMainBracket() {
       } else {
         html += `<span class="player" style="flex:1;min-width:120px;color:var(--text-light);">대기</span>`;
       }
-      html += `<input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:70px;">`;
       html += `<span class="vs">vs</span>`;
-      html += `<input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:70px;">`;
       if (match.p2) {
         html += `<span class="player ${p2Win ? 'win' : ''}" style="flex:1;min-width:120px;text-align:right;">${p2Names}<br><span style="font-size:0.75em;color:var(--text-light);">${p2Info}</span></span>`;
       } else {
@@ -2515,9 +2531,9 @@ function renderMainBracket() {
           <div style="font-weight:700;color:var(--primary);margin-bottom:8px;">준결승 <span class="court-badge">코트 1</span> <span style="font-size:0.85em;color:var(--text-light);font-weight:400;">밸런스: [${sP1BS}점] vs [${sP2BS}점]</span></div>
           <div class="match-row" style="flex-wrap:wrap;gap:8px;">`;
       html += `<span class="player ${sP1Win ? 'win' : ''}" style="flex:1;min-width:120px;">${sP1Names}<br><span style="font-size:0.75em;color:var(--text-light);">${sP1Info}</span></span>`;
-      html += `<input type="number" class="score-input" value="${semiResult.s1}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${semiResult.s1}" min="0" max="99" placeholder="0" style="width:70px;">`;
       html += `<span class="vs">vs</span>`;
-      html += `<input type="number" class="score-input" value="${semiResult.s2}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${semiResult.s2}" min="0" max="99" placeholder="0" style="width:70px;">`;
       html += `<span class="player ${sP2Win ? 'win' : ''}" style="flex:1;min-width:120px;text-align:right;">${sP2Names}<br><span style="font-size:0.75em;color:var(--text-light);">${sP2Info}</span></span>`;
       html += `</div><button class="confirm-score-btn" onclick="confirmScore(this)">✅ 점수 입력 완료</button></div>`;
     } else {
@@ -2589,9 +2605,9 @@ function renderMainBracket() {
       } else {
         html += `<span class="player" style="flex:1;min-width:120px;color:var(--text-light);">대기</span>`;
       }
-      html += `<input type="number" class="score-input" value="${finalResult.s1}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${finalResult.s1}" min="0" max="99" placeholder="0" style="width:70px;">`;
       html += `<span class="vs">vs</span>`;
-      html += `<input type="number" class="score-input" value="${finalResult.s2}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${finalResult.s2}" min="0" max="99" placeholder="0" style="width:70px;">`;
       if (finalMatch.p2) {
         html += `<span class="player ${fP2Win ? 'win' : ''}" style="flex:1;min-width:120px;text-align:right;">${fP2Names}<br><span style="font-size:0.75em;color:var(--text-light);">${fP2Info}</span></span>`;
       } else {
@@ -2684,9 +2700,9 @@ function renderMainBracket() {
       } else {
         html += `<span class="player" style="flex:1;min-width:120px;color:var(--text-light);">대기</span>`;
       }
-      html += `<input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:70px;">`;
       html += `<span class="vs">vs</span>`;
-      html += `<input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:70px;">`;
       if (match.p2) {
         html += `<span class="player ${p2Win ? 'win' : ''}" style="flex:1;min-width:120px;text-align:right;">${p2Names}<br><span style="font-size:0.75em;color:var(--text-light);">${p2Info}</span></span>`;
       } else {
@@ -2919,9 +2935,9 @@ function renderFinalBracket() {
       } else {
         html += `<span class="player" style="flex:1;min-width:120px;color:var(--text-light);">대기</span>`;
       }
-      html += `<input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${result.s1}" min="0" max="99" placeholder="0" style="width:70px;">`;
       html += `<span class="vs">vs</span>`;
-      html += `<input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:50px;">`;
+      html += `<input type="number" class="score-input" value="${result.s2}" min="0" max="99" placeholder="0" style="width:70px;">`;
       if (match.p2) {
         html += `<span class="player ${p2Win ? 'win' : ''}" style="flex:1;min-width:120px;text-align:right;">${p2Names}<br><span style="font-size:0.75em;color:var(--text-light);">${p2Info}</span></span>`;
       } else {
@@ -3051,11 +3067,12 @@ updateNav(1);
       <select id="rGrade"><option value="-">급수</option><option value="S">S</option><option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option></select>
       <select id="rGender"><option value="-">성별</option><option value="남">남</option><option value="여">여</option></select>
       <input type="text" id="rYear" placeholder="년도" onkeydown="if(event.key==='Enter')addRosterPlayer()">
+      <select id="rAssignGroup"><option value="0">조 자동</option><option value="1">1조</option><option value="2">2조</option><option value="3">3조</option><option value="4">4조</option></select>
       <button class="btn btn-primary" onclick="addRosterPlayer()">＋ 추가</button>
     </div>
     <table class="participant-table" id="rosterTable">
       <thead>
-        <tr><th>#</th><th style="text-align:left;">이름</th><th>급수</th><th>성별</th><th>년도</th><th>관리</th></tr>
+        <tr><th>#</th><th style="text-align:left;">이름</th><th>급수</th><th>성별</th><th>년도</th><th>지정조</th><th>관리</th></tr>
       </thead>
       <tbody id="rosterBody"></tbody>
     </table>
@@ -3063,7 +3080,7 @@ updateNav(1);
       <span id="rosterCount" style="color:var(--text-light);"></span>
       <div>
         <button class="btn btn-outline" onclick="closeRosterModal()">취소</button>
-        <button class="btn btn-primary" onclick="saveRoster()">💾 저장</button>
+        <button class="btn btn-primary" onclick="saveRosterAndClose()">💾 저장</button>
       </div>
     </div>
   </div>
