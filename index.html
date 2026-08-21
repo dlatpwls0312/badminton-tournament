@@ -208,8 +208,16 @@
   .modal-table th { background:var(--primary); color:white; padding:8px; font-size:0.85em; }
   .modal-table td { padding:6px 8px; text-align:center; border-bottom:1px solid var(--border); }
   .modal-table tr:nth-child(even) { background:#f9fbfa; }
-  .modal-footer { display:flex; gap:10px; justify-content:flex-end; }
+  .modal-footer { display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
   .modal-count { font-size:0.9em; color:var(--text-light); margin-bottom:8px; }
+  .modal-info { background:#f0f7ff; border-left:3px solid var(--primary); padding:8px 12px; border-radius:6px; margin-bottom:12px; font-size:0.85em; color:var(--text); line-height:1.5; }
+  .modal-add-row { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }
+  .modal-add-row input, .modal-add-row select { padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:0.9em; }
+  .modal-add-row input { flex:1; min-width:80px; }
+  .modal-add-row select { min-width:60px; }
+  .modal-input { padding:4px 8px; border:1.5px solid var(--border); border-radius:4px; font-size:0.85em; width:100%; box-sizing:border-box; }
+  .modal-select { padding:4px 6px; border:1.5px solid var(--border); border-radius:4px; font-size:0.85em; }
+  .modal-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; margin-bottom:12px; }
   .participant-table .grade-select {
     padding: 3px 8px; border-radius: 6px; border: 1.5px solid var(--border);
     font-size: 0.85em; font-weight: 700; cursor: pointer; background: white;
@@ -519,6 +527,16 @@
     .modal-input-row input, .modal-input-row select { padding: 6px 10px; font-size: 0.85em; }
     .modal-table th { padding: 5px; font-size: 0.75em; }
     .modal-table td { padding: 4px 6px; font-size: 0.8em; }
+    .modal-info { padding: 6px 10px; font-size: 0.8em; margin-bottom: 10px; }
+    .modal-add-row { gap: 4px; margin-bottom: 10px; }
+    .modal-add-row input { min-width: 0; flex: 1 1 45%; font-size: 0.85em; padding: 6px 8px; }
+    .modal-add-row select { min-width: 0; flex: 1 1 30%; font-size: 0.85em; padding: 6px 8px; }
+    .modal-add-row .btn { flex: 1 1 100%; font-size: 0.85em; padding: 7px 10px; }
+    .modal-input { font-size: 0.8em; padding: 3px 6px; }
+    .modal-select { font-size: 0.8em; padding: 3px 4px; }
+    .modal-footer { justify-content: center; gap: 8px; }
+    .modal-footer .btn { font-size: 0.85em; padding: 7px 14px; }
+    .modal-table-wrap { overflow-x: auto; }
 
     .info-box { padding: 8px 12px; font-size: 0.8em; }
     .playoff-info { padding: 8px 12px; font-size: 0.8em; }
@@ -578,6 +596,15 @@
     .modal-header h2 { font-size: 0.95em; }
     .modal-table th { padding: 4px; font-size: 0.7em; }
     .modal-table td { padding: 3px 4px; font-size: 0.75em; }
+    .modal-info { padding: 5px 8px; font-size: 0.75em; margin-bottom: 8px; }
+    .modal-add-row { gap: 4px; margin-bottom: 8px; }
+    .modal-add-row input { flex: 1 1 45%; font-size: 0.8em; padding: 5px 6px; }
+    .modal-add-row select { flex: 1 1 30%; font-size: 0.8em; padding: 5px 6px; }
+    .modal-add-row .btn { flex: 1 1 100%; font-size: 0.8em; padding: 6px 10px; }
+    .modal-input { font-size: 0.75em; padding: 3px 5px; }
+    .modal-select { font-size: 0.75em; padding: 2px 3px; }
+    .modal-footer { justify-content: center; gap: 6px; }
+    .modal-footer .btn { font-size: 0.8em; padding: 6px 12px; }
 
     .champion-box { padding: 10px; font-size: 0.95em; }
     .info-box { padding: 6px 10px; font-size: 0.75em; }
@@ -3072,12 +3099,14 @@ updateNav(1);
       <select id="rAssignGroup"><option value="0">조 자동</option><option value="1">1조</option><option value="2">2조</option><option value="3">3조</option><option value="4">4조</option></select>
       <button class="btn btn-primary" onclick="addRosterPlayer()">＋ 추가</button>
     </div>
+    <div class="modal-table-wrap">
     <table class="participant-table" id="rosterTable">
       <thead>
         <tr><th>#</th><th style="text-align:left;">이름</th><th>급수</th><th>성별</th><th>년도</th><th>지정조</th><th>관리</th></tr>
       </thead>
       <tbody id="rosterBody"></tbody>
     </table>
+    </div>
     <div class="modal-footer">
       <span id="rosterCount" style="color:var(--text-light);"></span>
       <div>
