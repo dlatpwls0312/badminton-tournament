@@ -619,6 +619,11 @@
 
 <div class="header">
   <h1>🏸 드롭샷 추가 대진표</h1>
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+    <button class="btn btn-primary" onclick="saveState()" style="font-size:0.85em;">💾 저장</button>
+    <button class="btn btn-outline" onclick="loadState()" style="font-size:0.85em;">📂 불러오기</button>
+    <span id="autoSaveStatus" style="font-size:0.75em;color:var(--text-light);align-self:center;"></span>
+  </div>
 </div>
 
 <!-- Step indicator -->
@@ -772,16 +777,121 @@ let partners = []; // [{p1:'이름', p2:'이름'}]  파트너 쌍 목록
 const COURT_COUNT = 4; // 코트 개수
 let activeGroupTab = -1; // -1 = 전체 코트 배정 탭, 0부터 = 각 조 탭
 let activeTimeTab = 0; // 코트 배정 내 타임 탭 (0부터)
+let currentStep = 1; // 현재 스텝 (1~4)
+
+// ===== 저장 / 불러오기 =====
+const STORAGE_KEY = 'badminton_tournament_state';
+
+function saveState() {
+  try {
+    const state = {
+      players, groups, groupCount, leagueMode, partners,
+      individualMatches, individualMatchResults,
+      leagueResults, partnerLeagueResults,
+      mainBracketData, mainBracketResults,
+      finalBracketData, finalBracketResults,
+      activeGroupTab, activeTimeTab, currentStep,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const status = document.getElementById('autoSaveStatus');
+    if (status) {
+      const time = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'});
+      status.textContent = `💾 ${time} 저장됨`;
+      status.style.color = 'var(--primary)';
+    }
+    return true;
+  } catch(e) { console.error('Save error:', e); alert('저장 중 오류가 발생했습니다.'); return false; }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) { alert('불러올 저장 데이터가 없습니다.'); return false; }
+    const state = JSON.parse(raw);
+    players = state.players || [];
+    groups = state.groups || [];
+    groupCount = state.groupCount || 2;
+    leagueMode = state.leagueMode || 'individual';
+    partners = state.partners || [];
+    individualMatches = state.individualMatches || {};
+    individualMatchResults = state.individualMatchResults || {};
+    leagueResults = state.leagueResults || {};
+    partnerLeagueResults = state.partnerLeagueResults || {};
+    mainBracketData = state.mainBracketData || null;
+    mainBracketResults = state.mainBracketResults || {};
+    finalBracketData = state.finalBracketData || null;
+    finalBracketResults = state.finalBracketResults || {};
+    activeGroupTab = state.activeGroupTab ?? -1;
+    activeTimeTab = state.activeTimeTab || 0;
+    currentStep = state.currentStep || 1;
+    // UI 복원
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('step'+i);
+      if (el) el.classList.add('hidden');
+    }
+    const stepEl = document.getElementById('step'+currentStep);
+    if (stepEl) stepEl.classList.remove('hidden');
+    updateNav(currentStep);
+    renderParticipants();
+    if (currentStep >= 2) {
+      if (leagueMode === 'individual') renderIndividualLeague();
+      else renderPartnerLeague();
+    }
+    if (currentStep >= 3 && mainBracketData) {
+      document.getElementById('mainBracketContainer').classList.remove('hidden');
+      const genBtn = document.getElementById('genMainBtn');
+      if (genBtn) genBtn.style.display = 'none';
+      renderMainBracket();
+    }
+    if (currentStep >= 4 && finalBracketData) {
+      document.getElementById('finalBracketContainer').classList.remove('hidden');
+      const genBtn = document.getElementById('genFinalBtn');
+      if (genBtn) genBtn.style.display = 'none';
+      renderFinalBracket();
+    }
+    const status = document.getElementById('autoSaveStatus');
+    if (status && state.savedAt) {
+      const time = new Date(state.savedAt).toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'});
+      status.textContent = `📂 ${time} 불러옴`;
+      status.style.color = 'var(--primary)';
+    }
+    return true;
+  } catch(e) { console.error('Load error:', e); alert('불러오기 중 오류가 발생했습니다.'); return false; }
+}
+
+function autoSave() {
+  try {
+    const state = {
+      players, groups, groupCount, leagueMode, partners,
+      individualMatches, individualMatchResults,
+      leagueResults, partnerLeagueResults,
+      mainBracketData, mainBracketResults,
+      finalBracketData, finalBracketResults,
+      activeGroupTab, activeTimeTab, currentStep,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const status = document.getElementById('autoSaveStatus');
+    if (status) {
+      const time = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'});
+      status.textContent = `💾 ${time} 자동저장`;
+      status.style.color = 'var(--text-light)';
+    }
+  } catch(e) {}
+}
 
 // ===== Step Navigation =====
-function updateNav(currentStep) {
+function updateNav(step) {
+  currentStep = step;
   for (let i = 1; i <= 4; i++) {
     const nav = document.getElementById('nav' + i);
     if (!nav) continue;
     nav.classList.remove('active', 'done');
-    if (i < currentStep) nav.classList.add('done');
-    else if (i === currentStep) nav.classList.add('active');
+    if (i < step) nav.classList.add('done');
+    else if (i === step) nav.classList.add('active');
   }
+  autoSave();
 }
 
 // ===== Step 1: 참가자 =====
@@ -805,6 +915,7 @@ function addPlayer() {
   nameEl.focus();
   sortPlayers(players);
   renderParticipants();
+  autoSave();
 }
 
 // ===== 드롭샷 기본 명단 (localStorage 영속화) =====
@@ -844,6 +955,7 @@ function addSamplePlayers() {
 function removePlayer(idx) {
   players.splice(idx, 1);
   renderParticipants();
+  autoSave();
 }
 
 function clearAll() {
@@ -892,17 +1004,21 @@ function clearAll() {
   if (btnStep4) btnStep4.disabled = true;
   updateNav(1);
   renderParticipants();
+  localStorage.removeItem(STORAGE_KEY);
+  autoSave();
 }
 
 function updateGrade(idx, newGrade) {
   players[idx].grade = newGrade;
   sortPlayers(players);
   renderParticipants();
+  autoSave();
 }
 
 function updateAssignGroup(idx, val) {
   players[idx].assignGroup = parseInt(val) || 0;
   renderParticipants();
+  autoSave();
 }
 
 // ===== 파트너 기능 =====
@@ -997,12 +1113,14 @@ function addPartnerPair() {
   partners.push({p1: s1, p2: s2});
   renderPartnerModal();
   renderParticipants();
+  autoSave();
 }
 
 function removePartnerPair(idx) {
   partners.splice(idx, 1);
   renderPartnerModal();
   renderParticipants();
+  autoSave();
 }
 
 function randomMatchRemaining() {
@@ -1015,6 +1133,7 @@ function randomMatchRemaining() {
   }
   renderPartnerModal();
   renderParticipants();
+  autoSave();
 }
 
 function savePartners() {
@@ -1793,6 +1912,7 @@ function renderIndividualLeague() {
 function switchGroupTab(idx) {
   activeGroupTab = idx;
   renderLeague();
+  autoSave();
 }
 
 function confirmScore(btn) {
@@ -1811,6 +1931,7 @@ function confirmScore(btn) {
     individualMatchResults[gName][mi].s1 = s1;
     individualMatchResults[gName][mi].s2 = s2;
     renderLeague();
+    autoSave();
   } else if (type === 'partner') {
     const gName = card.dataset.gname;
     const key = decodeURIComponent(card.dataset.key);
@@ -1819,6 +1940,7 @@ function confirmScore(btn) {
     partnerLeagueResults[gName][key].s1 = s1;
     partnerLeagueResults[gName][key].s2 = s2;
     renderLeague();
+    autoSave();
   } else if (type === 'main') {
     const ri = parseInt(card.dataset.ri);
     const mi = parseInt(card.dataset.mi);
@@ -1827,6 +1949,7 @@ function confirmScore(btn) {
     mainBracketResults[key].s1 = s1;
     mainBracketResults[key].s2 = s2;
     updateMainBracketScore(ri, mi, 's1', s1);
+    autoSave();
   } else if (type === 'final') {
     const ri = parseInt(card.dataset.ri);
     const mi = parseInt(card.dataset.mi);
@@ -1835,6 +1958,7 @@ function confirmScore(btn) {
     finalBracketResults[key].s1 = s1;
     finalBracketResults[key].s2 = s2;
     updateFinalBracketScore(ri, mi, 's1', s1);
+    autoSave();
   }
 }
 
@@ -1843,6 +1967,7 @@ function updateIndividualScore(gName, mi, side, val) {
   if (!individualMatchResults[gName][mi]) individualMatchResults[gName][mi] = { s1: '', s2: '' };
   individualMatchResults[gName][mi][side] = val;
   renderLeague();
+  autoSave();
 }
 
 // ===== Step 2: 조별 리그 =====
@@ -1857,6 +1982,7 @@ function goToLeague(mode) {
   document.getElementById('step2').classList.remove('hidden');
   updateNav(2);
   renderLeague();
+  autoSave();
 }
 
 function goBackToStep1() {
@@ -2110,6 +2236,7 @@ function renderCourtSchedule() {
 function switchTimeTab(ti) {
   activeTimeTab = ti;
   renderCourtSchedule();
+  autoSave();
 }
 
 function renderLeague() {
@@ -2365,6 +2492,7 @@ function goToStep3() {
   document.getElementById('genMainBtn').style.display = 'none';
   document.getElementById('btnStep4').disabled = true;
   generateMainBracket();
+  autoSave();
 }
 
 function goBackToStep2() {
@@ -2944,6 +3072,7 @@ function goToStep4() {
   document.getElementById('genFinalBtn').style.display = 'none';
   document.getElementById('championBox').classList.remove('show');
   generateFinalBracket();
+  autoSave();
 }
 
 function goBackToStep3() {
@@ -3168,11 +3297,64 @@ function resetAll() {
   document.getElementById('btnStep4').disabled = true;
   updateNav(1);
   renderParticipants();
+  localStorage.removeItem(STORAGE_KEY);
 }
 
-// 초기 렌더
-renderParticipants();
-updateNav(1);
+// ===== 페이지 로드 시 자동 복원 =====
+(function autoRestore() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) { renderParticipants(); updateNav(1); return; }
+    const state = JSON.parse(raw);
+    players = state.players || [];
+    groups = state.groups || [];
+    groupCount = state.groupCount || 2;
+    leagueMode = state.leagueMode || 'individual';
+    partners = state.partners || [];
+    individualMatches = state.individualMatches || {};
+    individualMatchResults = state.individualMatchResults || {};
+    leagueResults = state.leagueResults || {};
+    partnerLeagueResults = state.partnerLeagueResults || {};
+    mainBracketData = state.mainBracketData || null;
+    mainBracketResults = state.mainBracketResults || {};
+    finalBracketData = state.finalBracketData || null;
+    finalBracketResults = state.finalBracketResults || {};
+    activeGroupTab = state.activeGroupTab ?? -1;
+    activeTimeTab = state.activeTimeTab || 0;
+    currentStep = state.currentStep || 1;
+    // UI 복원
+    for (let i = 1; i <= 4; i++) {
+      const el = document.getElementById('step'+i);
+      if (el) el.classList.add('hidden');
+    }
+    const stepEl = document.getElementById('step'+currentStep);
+    if (stepEl) stepEl.classList.remove('hidden');
+    updateNav(currentStep);
+    renderParticipants();
+    if (currentStep >= 2) {
+      if (leagueMode === 'individual') renderIndividualLeague();
+      else renderPartnerLeague();
+    }
+    if (currentStep >= 3 && mainBracketData) {
+      document.getElementById('mainBracketContainer').classList.remove('hidden');
+      const genBtn = document.getElementById('genMainBtn');
+      if (genBtn) genBtn.style.display = 'none';
+      renderMainBracket();
+    }
+    if (currentStep >= 4 && finalBracketData) {
+      document.getElementById('finalBracketContainer').classList.remove('hidden');
+      const genBtn = document.getElementById('genFinalBtn');
+      if (genBtn) genBtn.style.display = 'none';
+      renderFinalBracket();
+    }
+    const status = document.getElementById('autoSaveStatus');
+    if (status && state.savedAt) {
+      const time = new Date(state.savedAt).toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'});
+      status.textContent = `📂 ${time} 자동 복원됨`;
+      status.style.color = 'var(--primary)';
+    }
+  } catch(e) { console.error('Auto-restore error:', e); renderParticipants(); updateNav(1); }
+})();
 </script>
 
 <!-- ===== 드롭샷 인원 조정 모달 ===== -->
