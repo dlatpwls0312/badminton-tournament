@@ -1517,8 +1517,39 @@ function assignGroups() {
 }
 
 // ===== 대진 시작 (개인/파트너 공통) =====
+function hasMatchResults() {
+  // 개인 대진 점수 확인
+  for (const gName in individualMatchResults) {
+    for (const mi in individualMatchResults[gName]) {
+      const r = individualMatchResults[gName][mi];
+      if (r && r.s1 !== '' && r.s2 !== '') return true;
+    }
+  }
+  // 파트너 대진 점수 확인
+  for (const gName in partnerLeagueResults) {
+    for (const key in partnerLeagueResults[gName]) {
+      const r = partnerLeagueResults[gName][key];
+      if (r && r.s1 !== '' && r.s2 !== '') return true;
+    }
+  }
+  // 본선/결승 점수 확인
+  for (const key in mainBracketResults) {
+    const r = mainBracketResults[key];
+    if (r && r.s1 !== '' && r.s2 !== '') return true;
+  }
+  for (const key in finalBracketResults) {
+    const r = finalBracketResults[key];
+    if (r && r.s1 !== '' && r.s2 !== '') return true;
+  }
+  return false;
+}
+
 function startLeague(mode) {
   if (!requireLogin('admin', {})) return;
+  // 기존 대진에 점수가 입력되어 있으면 경고
+  if (hasMatchResults()) {
+    if (!confirm('⚠️ 이미 점수가 입력된 대진이 있습니다!\n\n새 대진을 만들면 기존 조 편성, 점수, 순위가 모두 사라집니다.\n\n정말 새 대진을 만드시겠습니까?')) return;
+  }
   if (mode === 'individual') startIndividualLeague();
   else startPartnerLeague();
 }
