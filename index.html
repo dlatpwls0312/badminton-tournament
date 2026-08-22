@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏸 드롭샷 추가 대진표</title>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<!-- QR Code library -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
   :root {
     --primary: #1a7a4c;
@@ -610,6 +615,34 @@
     .info-box { padding: 6px 10px; font-size: 0.75em; }
     .actions .btn { font-size: 0.75em; padding: 5px 8px; }
 
+    /* ===== 로그인 / 권한 / QR ===== */
+    .auth-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px; font-size: 0.75em; font-weight: 600;
+    }
+    .auth-badge.admin { background: #e8f5e9; color: var(--primary-dark); border: 1px solid var(--primary-light); }
+    .auth-badge.group { background: #fff3e0; color: #e65100; border: 1px solid #ffb74d; }
+    .auth-badge.viewer { background: #f5f5f5; color: #757575; border: 1px solid #bdbdbd; }
+    .auth-badge.offline { background: #ffebee; color: #c62828; border: 1px solid #ef9a9a; }
+    .login-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+    .login-modal.show { display:flex; }
+    .login-box { background:var(--card); border-radius:12px; padding:24px; max-width:360px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.2); }
+    .login-box h2 { margin:0 0 16px; font-size:1.1em; }
+    .login-box input { width:100%; padding:10px 12px; border:1px solid #ddd; border-radius:8px; font-size:1em; margin-bottom:12px; box-sizing:border-box; }
+    .login-box .btn { width:100%; }
+    .login-box .login-hint { font-size:0.8em; color:var(--text-light); margin-top:8px; text-align:center; }
+    .qr-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center; }
+    .qr-modal.show { display:flex; }
+    .qr-box { background:var(--card); border-radius:12px; padding:24px; max-width:320px; width:90%; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.2); }
+    .qr-box h2 { margin:0 0 12px; font-size:1.1em; }
+    .qr-box .qr-area { display:flex; justify-content:center; margin:16px 0; }
+    .qr-box .qr-url { font-size:0.8em; color:var(--text-light); word-break:break-all; margin:8px 0; }
+    .qr-box .qr-copy-btn { margin-top:8px; }
+    .sync-status { font-size:0.7em; padding:2px 8px; border-radius:10px; }
+    .sync-status.online { color:var(--primary); }
+    .sync-status.offline { color:#999; }
+    .score-locked { opacity:0.5; cursor:not-allowed; }
+
     .court-match-card { padding: 5px 6px; font-size: 0.75em; }
     .court-match-card .court-num { width: 20px; height: 20px; }
   }
@@ -619,10 +652,14 @@
 
 <div class="header">
   <h1>🏸 드롭샷 추가 대진표</h1>
-  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
     <button class="btn btn-primary" onclick="saveState()" style="font-size:0.85em;">💾 저장</button>
     <button class="btn btn-outline" onclick="loadState()" style="font-size:0.85em;">📂 불러오기</button>
+    <button class="btn btn-outline" onclick="openLoginModal()" id="loginBtn" style="font-size:0.85em;">🔐 로그인</button>
+    <button class="btn btn-outline" onclick="openQrModal()" style="font-size:0.85em;">📱 QR 코드</button>
     <span id="autoSaveStatus" style="font-size:0.75em;color:var(--text-light);align-self:center;"></span>
+    <span id="syncStatus" class="sync-status offline" style="align-self:center;">🔴 오프라인</span>
+    <span id="authBadge" class="auth-badge offline" style="align-self:center;">로그인 필요</span>
   </div>
 </div>
 
@@ -896,6 +933,7 @@ function updateNav(step) {
 
 // ===== Step 1: 참가자 =====
 function addPlayer() {
+  if (!requireLogin('admin', {})) return;
   const nameEl = document.getElementById('pName');
   const gradeEl = document.getElementById('pGrade');
   const genderEl = document.getElementById('pGender');
@@ -953,12 +991,14 @@ function addSamplePlayers() {
 }
 
 function removePlayer(idx) {
+  if (!requireLogin('admin', {})) return;
   players.splice(idx, 1);
   renderParticipants();
   autoSave();
 }
 
 function clearAll() {
+  if (!requireLogin('admin', {})) return;
   if (!confirm('모든 참가자와 대진 정보를 초기화하시겠습니까?')) return;
   // 입력 폼 초기화
   document.getElementById('pName').value = '';
@@ -1009,6 +1049,7 @@ function clearAll() {
 }
 
 function updateGrade(idx, newGrade) {
+  if (!requireLogin('admin', {})) return;
   players[idx].grade = newGrade;
   sortPlayers(players);
   renderParticipants();
@@ -1016,6 +1057,7 @@ function updateGrade(idx, newGrade) {
 }
 
 function updateAssignGroup(idx, val) {
+  if (!requireLogin('admin', {})) return;
   players[idx].assignGroup = parseInt(val) || 0;
   renderParticipants();
   autoSave();
@@ -1105,6 +1147,7 @@ function renderPartnerModal() {
 }
 
 function addPartnerPair() {
+  if (!requireLogin('admin', {})) return;
   const s1 = document.getElementById('partnerSelect1').value;
   const s2 = document.getElementById('partnerSelect2').value;
   if (!s1 || !s2) { alert('두 참가자를 모두 선택하세요.'); return; }
@@ -1117,6 +1160,7 @@ function addPartnerPair() {
 }
 
 function removePartnerPair(idx) {
+  if (!requireLogin('admin', {})) return;
   partners.splice(idx, 1);
   renderPartnerModal();
   renderParticipants();
@@ -1124,6 +1168,7 @@ function removePartnerPair(idx) {
 }
 
 function randomMatchRemaining() {
+  if (!requireLogin('admin', {})) return;
   const unpaired = getUnpairedPlayers();
   if (unpaired.length < 2) { alert('남은 인원이 2명 미만입니다.'); return; }
   const shuffled = [...unpaired];
@@ -1419,6 +1464,7 @@ function assignGroups() {
 
 // ===== 대진 시작 (개인/파트너 공통) =====
 function startLeague(mode) {
+  if (!requireLogin('admin', {})) return;
   if (mode === 'individual') startIndividualLeague();
   else startPartnerLeague();
 }
@@ -1923,6 +1969,14 @@ function confirmScore(btn) {
   const s1 = inputs[0].value;
   const s2 = inputs[1].value;
   const type = card.dataset.type;
+  // 권한 체크
+  if (type === 'individual' || type === 'partner') {
+    const gName = card.dataset.gname;
+    const groupNum = parseInt(gName) - 1;
+    if (!requireLogin('score', { group: groupNum })) return;
+  } else if (type === 'main' || type === 'final') {
+    if (!requireLogin('score', {})) return;
+  }
   if (type === 'individual') {
     const gName = card.dataset.gname;
     const mi = parseInt(card.dataset.mi);
@@ -2557,6 +2611,7 @@ function pairIndividualsForBracket(qualified) {
 }
 
 function generateMainBracket() {
+  if (!requireLogin('admin', {})) return;
   const qualified = getQualifiedPlayers();
   if (qualified.length < 2) { alert('진출 팀이 부족합니다. 조별 리그 결과를 입력하세요.'); return; }
 
@@ -3082,6 +3137,7 @@ function goBackToStep3() {
 }
 
 function generateFinalBracket() {
+  if (!requireLogin('admin', {})) return;
   const winners = getMainWinners();
   if (winners.length < 2) { alert('본선 결과를 먼저 입력하세요. 결승전 진출자가 부족합니다.'); return; }
 
@@ -3281,6 +3337,7 @@ function escapeAttr(str) {
 }
 
 function resetAll() {
+  if (!requireLogin('admin', {})) return;
   if (!confirm('모든 데이터를 초기화하고 처음부터 시작하시겠습니까?')) return;
   players = []; groups = []; leagueResults = {}; partnerLeagueResults = {};
   mainBracketData = null; mainBracketResults = {};
@@ -3299,6 +3356,298 @@ function resetAll() {
   renderParticipants();
   localStorage.removeItem(STORAGE_KEY);
 }
+
+// ===== Firebase 실시간 동기화 =====
+const FIREBASE_CONFIG = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+let firebaseApp = null;
+let firebaseDB = null;
+let firebaseRef = null;
+let firebaseConnected = false;
+let firebaseSyncing = false; // Firebase에서 데이터를 받아올 때 true (무한 루프 방지)
+
+function initFirebase() {
+  try {
+    if (typeof firebase === 'undefined') { console.warn('Firebase SDK not loaded'); return false; }
+    if (FIREBASE_CONFIG.apiKey === 'YOUR_API_KEY') { console.warn('Firebase config not set'); return false; }
+    firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+    firebaseDB = firebase.database();
+    firebaseRef = firebaseDB.ref('tournament');
+    // 실시간 리스너
+    firebaseRef.on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (data && !firebaseSyncing) {
+        firebaseSyncing = true;
+        applyFirebaseData(data);
+        firebaseSyncing = false;
+      }
+    });
+    firebaseConnected = true;
+    console.log('Firebase connected');
+    const syncStatus = document.getElementById('syncStatus');
+    if (syncStatus) { syncStatus.textContent = '🟢 온라인'; syncStatus.className = 'sync-status online'; }
+    return true;
+  } catch(e) { console.error('Firebase init error:', e); return false; }
+}
+
+// Firebase 연결 실패 시 syncStatus 업데이트
+if (typeof firebase !== 'undefined' && FIREBASE_CONFIG.apiKey === 'YOUR_API_KEY') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const syncStatus = document.getElementById('syncStatus');
+    if (syncStatus) { syncStatus.textContent = '🔴 오프라인'; syncStatus.className = 'sync-status offline'; }
+  });
+}
+
+function syncToFirebase() {
+  if (!firebaseConnected || firebaseSyncing) return;
+  try {
+    const state = {
+      players, groups, groupCount, leagueMode, partners,
+      individualMatches, individualMatchResults,
+      leagueResults, partnerLeagueResults,
+      mainBracketData, mainBracketResults,
+      finalBracketData, finalBracketResults,
+      activeGroupTab, activeTimeTab, currentStep,
+      savedAt: new Date().toISOString()
+    };
+    firebaseRef.set(state);
+  } catch(e) { console.error('Firebase sync error:', e); }
+}
+
+function applyFirebaseData(data) {
+  players = data.players || [];
+  groups = data.groups || [];
+  groupCount = data.groupCount || 2;
+  leagueMode = data.leagueMode || 'individual';
+  partners = data.partners || [];
+  individualMatches = data.individualMatches || {};
+  individualMatchResults = data.individualMatchResults || {};
+  leagueResults = data.leagueResults || {};
+  partnerLeagueResults = data.partnerLeagueResults || {};
+  mainBracketData = data.mainBracketData || null;
+  mainBracketResults = data.mainBracketResults || {};
+  finalBracketData = data.finalBracketData || null;
+  finalBracketResults = data.finalBracketResults || {};
+  activeGroupTab = data.activeGroupTab ?? -1;
+  activeTimeTab = data.activeTimeTab || 0;
+  currentStep = data.currentStep || 1;
+  // UI 갱신
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('step'+i);
+    if (el) el.classList.add('hidden');
+  }
+  const stepEl = document.getElementById('step'+currentStep);
+  if (stepEl) stepEl.classList.remove('hidden');
+  updateNav(currentStep);
+  renderParticipants();
+  if (currentStep >= 2) {
+    if (leagueMode === 'individual') renderIndividualLeague();
+    else renderPartnerLeague();
+  }
+  if (currentStep >= 3 && mainBracketData) {
+    document.getElementById('mainBracketContainer').classList.remove('hidden');
+    const genBtn = document.getElementById('genMainBtn');
+    if (genBtn) genBtn.style.display = 'none';
+    renderMainBracket();
+  }
+  if (currentStep >= 4 && finalBracketData) {
+    document.getElementById('finalBracketContainer').classList.remove('hidden');
+    const genBtn = document.getElementById('genFinalBtn');
+    if (genBtn) genBtn.style.display = 'none';
+    renderFinalBracket();
+  }
+  const status = document.getElementById('autoSaveStatus');
+  if (status && data.savedAt) {
+    const time = new Date(data.savedAt).toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit'});
+    status.textContent = `🔄 ${time} 동기화됨`;
+    status.style.color = 'var(--primary)';
+  }
+}
+
+// ===== 권한 시스템 =====
+const ADMIN_NAMES = ['박준성', '이화윤', '김현정', '홍정표', '임세진'];
+let currentUser = null; // { name, role: 'admin'|'group'|'viewer', group: null|number }
+
+function checkPermission(action, context) {
+  // context: { group: number } for group-specific actions
+  if (!currentUser) return false;
+  if (currentUser.role === 'admin') return true;
+  if (currentUser.role === 'group' && context && context.group !== undefined) {
+    return currentUser.group === context.group;
+  }
+  return false;
+}
+
+function requireLogin(action, context) {
+  if (!currentUser) {
+    alert('로그인이 필요합니다. 상단의 🔐 로그인 버튼을 눌러주세요.');
+    openLoginModal();
+    return false;
+  }
+  if (!checkPermission(action, context)) {
+    if (currentUser.role === 'viewer') {
+      alert('읽기 전용 권한입니다. 점수 입력 권한이 없습니다.');
+    } else if (currentUser.role === 'group') {
+      const myGroup = currentUser.group + 1;
+      alert(`${myGroup}조 담당자 권한입니다.\n${myGroup}조 점수만 입력할 수 있습니다.`);
+    }
+    return false;
+  }
+  return true;
+}
+
+function openLoginModal() {
+  document.getElementById('loginModal').classList.add('show');
+  const sel = document.getElementById('loginNameSelect');
+  // 참가자 명단 + 관리자 옵션
+  let opts = '<option value="">-- 이름 선택 --</option>';
+  players.forEach(p => {
+    const isAdmin = ADMIN_NAMES.includes(p.name);
+    opts += `<option value="${escapeAttr(p.name)}">${escapeHtml(p.name)} (${p.grade})${isAdmin ? ' ★ 관리자' : ''}</option>`;
+  });
+  // 참가자 명단에 없는 관리자도 추가
+  ADMIN_NAMES.forEach(name => {
+    if (!players.some(p => p.name === name)) {
+      opts += `<option value="${escapeAttr(name)}">${escapeHtml(name)} (★ 관리자)</option>`;
+    }
+  });
+  opts += '<option value="__viewer__">관람객 (읽기 전용)</option>';
+  sel.innerHTML = opts;
+  document.getElementById('loginRoleInfo').textContent = '';
+}
+
+function closeLoginModal() {
+  document.getElementById('loginModal').classList.remove('show');
+}
+
+function onLoginNameChange() {
+  const name = document.getElementById('loginNameSelect').value;
+  const info = document.getElementById('loginRoleInfo');
+  if (!name) { info.textContent = ''; return; }
+  if (name === '__viewer__') {
+    info.innerHTML = '<span style="color:var(--text-light);">👁️ 관람객 - 읽기 전용</span>';
+    return;
+  }
+  if (ADMIN_NAMES.includes(name)) {
+    info.innerHTML = '<span style="color:var(--primary);font-weight:700;">★ 관리자 - 모든 입력 가능</span>';
+  } else {
+    // 참가자인 경우, 어느 조에 속하는지 확인
+    let groupNum = '?';
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (groups[gi].some(p => p.name === name)) { groupNum = gi + 1; break; }
+    }
+    info.innerHTML = `<span style="color:var(--accent);">📋 ${groupNum}조 담당자 - 해당 조 점수 입력 가능</span>`;
+  }
+}
+
+function doLogin() {
+  const name = document.getElementById('loginNameSelect').value;
+  if (!name) { alert('이름을 선택하세요.'); return; }
+  if (name === '__viewer__') {
+    currentUser = { name: '관람객', role: 'viewer', group: null };
+  } else if (ADMIN_NAMES.includes(name)) {
+    currentUser = { name, role: 'admin', group: null };
+  } else {
+    // 참가자 → 조 담당자
+    let groupNum = -1;
+    for (let gi = 0; gi < groups.length; gi++) {
+      if (groups[gi].some(p => p.name === name)) { groupNum = gi; break; }
+    }
+    if (groupNum === -1) {
+      // 조가 아직 편성되지 않은 경우 → 관람객
+      currentUser = { name, role: 'viewer', group: null };
+    } else {
+      currentUser = { name, role: 'group', group: groupNum };
+    }
+  }
+  // 세션 저장
+  sessionStorage.setItem('badminton_user', JSON.stringify(currentUser));
+  updateLoginUI();
+  closeLoginModal();
+}
+
+function doLogout() {
+  currentUser = null;
+  sessionStorage.removeItem('badminton_user');
+  updateLoginUI();
+}
+
+function updateLoginUI() {
+  const badge = document.getElementById('authBadge');
+  const btn = document.getElementById('loginBtn');
+  if (!badge || !btn) return;
+  if (currentUser) {
+    let roleText = '';
+    if (currentUser.role === 'admin') roleText = '★ 관리자';
+    else if (currentUser.role === 'group') roleText = `${currentUser.group + 1}조 담당`;
+    else roleText = '👁️ 관람객';
+    badge.textContent = `${currentUser.name} (${roleText})`;
+    badge.className = 'auth-badge online';
+    btn.textContent = '🚪 로그아웃';
+    btn.onclick = doLogout;
+  } else {
+    badge.textContent = '로그인 필요';
+    badge.className = 'auth-badge offline';
+    btn.textContent = '🔐 로그인';
+    btn.onclick = openLoginModal;
+  }
+}
+
+// ===== QR 코드 =====
+function openQrModal() {
+  document.getElementById('qrModal').classList.add('show');
+  const url = window.location.href;
+  document.getElementById('qrUrlText').textContent = url;
+  // QR 코드 생성
+  const container = document.getElementById('qrCodeContainer');
+  container.innerHTML = '';
+  if (typeof QRCode === 'function') {
+    new QRCode(container, {
+      text: url,
+      width: 200,
+      height: 200,
+      colorDark: '#1a7a4c',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } else {
+    container.innerHTML = '<p style="color:var(--text-light);">QR 코드 라이브러리 로드 실패</p>';
+  }
+}
+
+function closeQrModal() {
+  document.getElementById('qrModal').classList.remove('show');
+}
+
+function copyQrUrl() {
+  const url = window.location.href;
+  navigator.clipboard.writeText(url).then(() => {
+    alert('URL이 복사되었습니다!');
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    alert('URL이 복사되었습니다!');
+  });
+}
+
+// ===== autoSave 오버라이드: Firebase 동기화 추가 =====
+const _originalAutoSave = autoSave;
+autoSave = function() {
+  _originalAutoSave();
+  syncToFirebase();
+};
 
 // ===== 페이지 로드 시 자동 복원 =====
 (function autoRestore() {
@@ -3354,6 +3703,20 @@ function resetAll() {
       status.style.color = 'var(--primary)';
     }
   } catch(e) { console.error('Auto-restore error:', e); renderParticipants(); updateNav(1); }
+})();
+
+// ===== 초기화: 로그인 복원 + Firebase 연결 =====
+(function initSystem() {
+  // 세션에서 로그인 복원
+  try {
+    const savedUser = sessionStorage.getItem('badminton_user');
+    if (savedUser) {
+      currentUser = JSON.parse(savedUser);
+      updateLoginUI();
+    }
+  } catch(e) {}
+  // Firebase 초기화
+  initFirebase();
 })();
 </script>
 
@@ -3417,6 +3780,46 @@ function resetAll() {
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closePartnerModal()">취소</button>
       <button class="btn btn-primary" onclick="savePartners()">💾 일괄 저장하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 로그인 모달 ===== -->
+<div class="modal-overlay" id="loginModal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-header">
+      <h2>🔐 로그인</h2>
+      <button class="modal-close" onclick="closeLoginModal()">✕</button>
+    </div>
+    <div style="padding:16px;">
+      <p style="font-size:0.85em;color:var(--text-light);margin-bottom:12px;">
+        이름을 선택하면 권한이 부여됩니다.<br>
+        <strong>관리자</strong>: 모든 입력 가능 / <strong>조 담당자</strong>: 해당 조 점수만 입력 / <strong>관람객</strong>: 읽기 전용
+      </p>
+      <select id="loginNameSelect" style="width:100%;padding:10px;font-size:1em;border:2px solid var(--border);border-radius:8px;margin-bottom:12px;" onchange="onLoginNameChange()">
+        <option value="">-- 이름 선택 --</option>
+      </select>
+      <div id="loginRoleInfo" style="font-size:0.8em;color:var(--text-light);text-align:center;margin-bottom:12px;"></div>
+      <button class="btn btn-primary" style="width:100%;" onclick="doLogin()">로그인</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== QR 코드 모달 ===== -->
+<div class="modal-overlay" id="qrModal">
+  <div class="modal-box" style="max-width:360px;text-align:center;">
+    <div class="modal-header">
+      <h2>📱 QR 코드</h2>
+      <button class="modal-close" onclick="closeQrModal()">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <div id="qrCodeContainer" style="display:flex;justify-content:center;margin-bottom:16px;"></div>
+      <p style="font-size:0.85em;color:var(--text-light);margin-bottom:12px;">
+        QR 코드를 스캔하면 대진표 페이지로 이동합니다.<br>
+        같은 WiFi 환경에서 접속 가능합니다.
+      </p>
+      <p style="font-size:0.8em;color:var(--text-light);word-break:break-all;margin-bottom:12px;" id="qrUrlText"></p>
+      <button class="btn btn-outline" style="width:100%;" onclick="copyQrUrl()">📋 URL 복사</button>
     </div>
   </div>
 </div>
