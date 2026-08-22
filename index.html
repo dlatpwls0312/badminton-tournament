@@ -665,10 +665,10 @@
 
 <!-- Step indicator -->
 <div class="step-indicator" id="stepIndicator">
-  <div class="step-item active" id="nav1"><span class="step-num">1</span> 참가자 등록</div>
-  <div class="step-item" id="nav2"><span class="step-num">2</span> 조별 리그</div>
-  <div class="step-item" id="nav3"><span class="step-num">3</span> 본선 토너먼트</div>
-  <div class="step-item" id="nav4"><span class="step-num">4</span> 결승전</div>
+  <div class="step-item active" id="nav1" onclick="goToStep(1)" style="cursor:pointer;"><span class="step-num">1</span> 참가자 등록</div>
+  <div class="step-item" id="nav2" onclick="goToStep(2)" style="cursor:pointer;"><span class="step-num">2</span> 조별 리그</div>
+  <div class="step-item" id="nav3" onclick="goToStep(3)" style="cursor:pointer;"><span class="step-num">3</span> 본선 토너먼트</div>
+  <div class="step-item" id="nav4" onclick="goToStep(4)" style="cursor:pointer;"><span class="step-num">4</span> 결승전</div>
 </div>
 
 <!-- Step 1: 참가자 등록 -->
@@ -715,6 +715,11 @@
     </table>
   </div>
   <div class="participant-count" id="participantCount"></div>
+
+  <!-- 대진으로 돌아가기 버튼 (조별리그 데이터가 있을 때만 표시) -->
+  <div id="backToLeagueBtn" style="display:none;margin-top:12px;">
+    <button class="btn btn-accent" onclick="goToStep(2)" style="font-size:0.95em;">🏸 대진으로 돌아가기 →</button>
+  </div>
 
   <!-- 조 개수 선택 + 대진 모드 버튼 -->
   <div class="group-input-row">
@@ -877,6 +882,7 @@ function loadState() {
       if (leagueMode === 'individual') renderIndividualLeague();
       else renderPartnerLeague();
     }
+    updateBackToLeagueBtn();
     if (currentStep >= 3 && mainBracketData) {
       document.getElementById('mainBracketContainer').classList.remove('hidden');
       const genBtn = document.getElementById('genMainBtn');
@@ -930,7 +936,52 @@ function updateNav(step) {
     if (i < step) nav.classList.add('done');
     else if (i === step) nav.classList.add('active');
   }
+  updateBackToLeagueBtn();
   autoSave();
+}
+
+// 특정 스텝으로 바로 이동 (데이터가 있을 때만)
+function goToStep(step) {
+  // step 2 이상으로 가려면 조별리그 데이터가 있어야 함
+  if (step >= 2 && (!groups || groups.length === 0)) {
+    alert('아직 조별 리그가 생성되지 않았습니다.\n먼저 대진을 생성해주세요.');
+    return;
+  }
+  // step 3 이상으로 가려면 본선 데이터가 있어야 함
+  if (step >= 3 && !mainBracketData) {
+    alert('아직 본선 토너먼트가 생성되지 않았습니다.');
+    return;
+  }
+  // step 4로 가려면 결승 데이터가 있어야 함
+  if (step >= 4 && !finalBracketData) {
+    alert('아직 결승전이 생성되지 않았습니다.');
+    return;
+  }
+  // 모든 스텝 숨기기
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById('step'+i);
+    if (el) el.classList.add('hidden');
+  }
+  // 대상 스텝 보이기
+  const target = document.getElementById('step'+step);
+  if (target) target.classList.remove('hidden');
+  updateNav(step);
+  // 필요한 렌더링
+  if (step === 2) renderLeague();
+  if (step === 3 && mainBracketData) renderMainBracket();
+  if (step === 4 && finalBracketData) renderFinalBracket();
+}
+
+// step1에서 "대진으로 돌아가기" 버튼 표시 여부
+function updateBackToLeagueBtn() {
+  const btn = document.getElementById('backToLeagueBtn');
+  if (!btn) return;
+  // 조별리그 데이터가 있으면 버튼 표시
+  if (groups && groups.length > 0) {
+    btn.style.display = '';
+  } else {
+    btn.style.display = 'none';
+  }
 }
 
 // ===== Step 1: 참가자 =====
@@ -1343,6 +1394,7 @@ function renderParticipants() {
   document.getElementById('participantCount').textContent = `총 ${players.length}명`;
   document.getElementById('pCount').textContent = `(${players.length}명)`;
   setupGroupCountSelect();
+  updateBackToLeagueBtn();
 }
 
 // ===== 조 개수 선택 드롭다운 =====
@@ -2045,6 +2097,7 @@ function goBackToStep1() {
   document.getElementById('step2').classList.add('hidden');
   document.getElementById('step1').classList.remove('hidden');
   updateNav(1);
+  renderParticipants();
 }
 
 // ===== 코트 배정 (코트 4개) =====
