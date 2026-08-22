@@ -822,7 +822,8 @@ let activeTimeTab = 0; // 코트 배정 내 타임 탭 (0부터)
 let currentStep = 1; // 현재 스텝 (1~4)
 
 // ===== 저장 / 불러오기 =====
-const STORAGE_KEY = 'badminton_tournament_state';
+const STORAGE_KEY = 'badminton_tournament_state';       // 자동 저장용
+const MANUAL_SAVE_KEY = 'badminton_tournament_manual';  // 수동 저장용 (별도 슬롯)
 
 function saveState() {
   try {
