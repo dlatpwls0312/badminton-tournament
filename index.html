@@ -1499,44 +1499,64 @@ function generateIndividualMatches(gi) {
     return getCombos(active4);
   });
 
-  // 백트래킹: 중복 최소화 → 밸런스 최적화
-  // 파트너 팀은 중복 카운트에서 제외 (어쩔 수 없이 같은 팀이므로)
-  let bestSolution = null;
-  let bestDupCount = Infinity;
-  let bestTotalDiff = Infinity;
+  // 2패스 백트래킹: 중복 불가피 시 밸런스 우선
+  // 1패스: 최소 중복 수 계산 (밸런스 무시)
+  // 2패스: 최소 중복 수에서 밸런스 최적 (max diff → total diff)
   const totalRounds = rounds.length;
+  let minDupCount = Infinity;
 
-  function backtrack(roundIdx, usedPairs, currentSolution, dupCount, totalDiff) {
-    if (dupCount > bestDupCount) return;
-    if (dupCount === bestDupCount && totalDiff >= bestTotalDiff) return;
+  function backtrackMinDup(roundIdx, usedPairs, dupCount) {
+    if (dupCount > minDupCount) return;
+    if (roundIdx === totalRounds) {
+      if (dupCount < minDupCount) minDupCount = dupCount;
+      return;
+    }
+    for (const combo of roundCombos[roundIdx]) {
+      const t1Dup = combo.t1IsPartner ? 0 : (usedPairs.has(combo.t1key) ? 1 : 0);
+      const t2Dup = combo.t2IsPartner ? 0 : (usedPairs.has(combo.t2key) ? 1 : 0);
+      const newPairs = new Set(usedPairs);
+      if (!combo.t1IsPartner) newPairs.add(combo.t1key);
+      if (!combo.t2IsPartner) newPairs.add(combo.t2key);
+      backtrackMinDup(roundIdx + 1, newPairs, dupCount + t1Dup + t2Dup);
+    }
+  }
+  backtrackMinDup(0, new Set(), 0);
+
+  // 2패스: 최소 중복 수에서 밸런스 최적 (max diff 최소 → total diff 최소)
+  let bestSolution = null;
+  let bestMaxDiff = Infinity;
+  let bestTotalDiff = Infinity;
+
+  function backtrackBalance(roundIdx, usedPairs, currentSolution, dupCount, maxDiff, totalDiff) {
+    if (dupCount > minDupCount) return;
+    if (maxDiff > bestMaxDiff) return;
+    if (maxDiff === bestMaxDiff && totalDiff >= bestTotalDiff) return;
 
     if (roundIdx === totalRounds) {
-      if (dupCount < bestDupCount || (dupCount === bestDupCount && totalDiff < bestTotalDiff)) {
-        bestDupCount = dupCount;
-        bestTotalDiff = totalDiff;
-        bestSolution = currentSolution.map(c => ({ ...c }));
+      if (dupCount === minDupCount) {
+        if (maxDiff < bestMaxDiff || (maxDiff === bestMaxDiff && totalDiff < bestTotalDiff)) {
+          bestMaxDiff = maxDiff;
+          bestTotalDiff = totalDiff;
+          bestSolution = currentSolution.map(c => ({ ...c }));
+        }
       }
       return;
     }
 
     for (const combo of roundCombos[roundIdx]) {
-      // 파트너 팀은 중복 카운트 제외
       const t1Dup = combo.t1IsPartner ? 0 : (usedPairs.has(combo.t1key) ? 1 : 0);
       const t2Dup = combo.t2IsPartner ? 0 : (usedPairs.has(combo.t2key) ? 1 : 0);
-      const newDup = t1Dup + t2Dup;
-
       const newPairs = new Set(usedPairs);
-      // 파트너 팀은 usedPairs에 추가하지 않음 (항상 같은 팀이므로 추적 무의미)
       if (!combo.t1IsPartner) newPairs.add(combo.t1key);
       if (!combo.t2IsPartner) newPairs.add(combo.t2key);
-
+      const newMaxDiff = Math.max(maxDiff, combo.diff);
+      if (newMaxDiff > bestMaxDiff) continue;
       currentSolution.push(combo);
-      backtrack(roundIdx + 1, newPairs, currentSolution, dupCount + newDup, totalDiff + combo.diff);
+      backtrackBalance(roundIdx + 1, newPairs, currentSolution, dupCount + t1Dup + t2Dup, newMaxDiff, totalDiff + combo.diff);
       currentSolution.pop();
     }
   }
-
-  backtrack(0, new Set(), [], 0, 0);
+  backtrackBalance(0, new Set(), [], 0, 0, 0);
 
   if (!bestSolution) {
     bestSolution = roundCombos.map(rc => rc[0]);
