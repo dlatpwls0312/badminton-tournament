@@ -1503,16 +1503,36 @@ function assignGroups() {
       }
     }
   } else {
-    // 파트너 대진 또는 파트너 없음: 라운드로빈 배정
+    // 파트너 대진: 팀 수(쌍 수) 기준으로 균등 배정 (선수 수가 아닌 팀 수)
     const units = [...remainingPairUnits, ...remainingSoloUnits];
     shuffleArray(units);
+    // 각 조의 현재 팀 수 계산 (지정조 배정된 분)
+    const groupTeamCount = new Array(groupCount).fill(0);
+    for (let gi = 0; gi < groupCount; gi++) {
+      const g = groups[gi];
+      const used = new Set();
+      let cnt = 0;
+      g.forEach(p => {
+        if (used.has(p.name)) return;
+        const pn = getPartnerName(p.name);
+        if (pn) {
+          const partner = g.find(p2 => p2.name === pn);
+          if (partner && !used.has(pn)) {
+            cnt++; used.add(p.name); used.add(pn); return;
+          }
+        }
+        cnt++; used.add(p.name);
+      });
+      groupTeamCount[gi] = cnt;
+    }
     for (let i = 0; i < units.length; i++) {
-      // 가장 적은 조에 배정
+      // 팀 수가 가장 적은 조에 배정
       let minGi = 0;
       for (let gi = 1; gi < groupCount; gi++) {
-        if (groups[gi].length < groups[minGi].length) minGi = gi;
+        if (groupTeamCount[gi] < groupTeamCount[minGi]) minGi = gi;
       }
       groups[minGi].push(...units[i]);
+      groupTeamCount[minGi]++;
     }
   }
 }
@@ -1585,6 +1605,8 @@ function startIndividualLeague() {
     }
   }
   initIndividualLeagueResults();
+  activeGroupTab = 0;
+  activeTimeTab = 0;
   document.getElementById('step1').classList.add('hidden');
   document.getElementById('step2').classList.remove('hidden');
   updateNav(2);
@@ -1619,6 +1641,8 @@ function startPartnerLeague() {
     }
   }
   initPartnerLeagueResults();
+  activeGroupTab = 0;
+  activeTimeTab = 0;
   document.getElementById('step1').classList.add('hidden');
   document.getElementById('step2').classList.remove('hidden');
   updateNav(2);
@@ -2178,35 +2202,193 @@ function buildCourtSchedule() {
     });
   }
 
-  // 2. 라운드별 순차 배치: 같은 라운드의 경기를 조 순서대로 배치
-  // → 1번 코트=1조, 2번 코트=2조 순서, 조가 적으면 앞조부터 추가 경기 채우기
+  // 2. 조별 총 경기 수 계산
   const gNames = Object.keys(groupRoundMatches).sort((a, b) => parseInt(a) - parseInt(b));
+  const groupTotalMatches = {};
+  gNames.forEach(gn => {
+    let total = 0;
+    groupRoundMatches[gn].forEach(round => { if (round) total += round.length; });
+    groupTotalMatches[gn] = total;
+  });
+
+  // 3. 고정 코트 알고리즘: 조 수 < 코트 수일 때
+  // - 각 조별 전용 코트 배정 (조1→코트1, 조2→코트2, ...)
+  // - 남은 코트는 경기 수가 많은 조들이 번갈아 사용
+  if (gNames.length >= 2 && gNames.length < COURT_COUNT) {
+    return buildCourtScheduleFixed(groupRoundMatches, gNames);
+  }
+
+  // 4. 폴백: 기존 알고리즘 (2패스 그리디)
+  return buildCourtScheduleLegacy(groupRoundMatches, gNames);
+}
+
+// ===== 코트 배정: 고정 코트 알고리즘 (조별 전용 코트 + 공유 코트 교대) =====
+// 조1→코트1, 조2→코트2, 조3→코트3 고정, 남은 코트는 경기 수 많은 조가 번갈아 사용
+// 핵심: 4팀 라운드로빈은 같은 라운드의 2경기만 동시 진행 가능 (다른 라운드는 선수 겹침)
+// 따라서 공유 코트를 받은 조는 같은 라운드 2경기를 동시에 진행
+function buildCourtScheduleFixed(groupRoundMatches, gNames) {
+  const numGroups = gNames.length;
+  const dedicatedCourts = Math.min(numGroups, COURT_COUNT);
+  const sharedCourtCount = COURT_COUNT - dedicatedCourts;
+
+  // 2조일 때: 1조→코트1,2 / 2조→코트3,4 각 조별 전용 코트 2개씩 배정
+  if (numGroups === 2 && COURT_COUNT === 4) {
+    const courtsPerGroup = 2;
+    const groupRounds2 = {};
+    gNames.forEach(gn => {
+      groupRounds2[gn] = (groupRoundMatches[gn] || []).map(r => r ? [...r] : []);
+    });
+    function remaining2(gn) { return groupRounds2[gn].reduce((s, r) => s + r.length, 0); }
+    function findFullRound2(gn) {
+      for (let r = 0; r < groupRounds2[gn].length; r++) {
+        if (groupRounds2[gn][r].length >= courtsPerGroup) return r;
+      }
+      return -1;
+    }
+    function findAnyRound2(gn) {
+      for (let r = 0; r < groupRounds2[gn].length; r++) {
+        if (groupRounds2[gn][r].length > 0) return r;
+      }
+      return -1;
+    }
+    const times = [];
+    let safety = 0;
+    while (gNames.some(gn => remaining2(gn) > 0) && safety < 200) {
+      const timeSlots = new Array(COURT_COUNT).fill(null);
+      gNames.forEach((gn, gi) => {
+        if (remaining2(gn) === 0) return;
+        const startCourt = gi * courtsPerGroup;
+        // 2경기 이상 라운드 우선, 없으면 아무 라운드
+        let ri = findFullRound2(gn);
+        if (ri < 0) ri = findAnyRound2(gn);
+        if (ri < 0) return;
+        const round = groupRounds2[gn][ri];
+        for (let c = 0; c < courtsPerGroup && c < round.length; c++) {
+          timeSlots[startCourt + c] = round[c];
+        }
+        groupRounds2[gn][ri] = round.slice(courtsPerGroup);
+      });
+      times.push(timeSlots);
+      safety++;
+    }
+    return times;
+  }
+
+  if (sharedCourtCount <= 0) {
+    return buildCourtScheduleLegacy(groupRoundMatches, gNames);
+  }
+
+  // 조별 라운드별 경기 배열 복사 (원본 보호)
+  const groupRounds = {};
+  gNames.forEach(gn => {
+    groupRounds[gn] = (groupRoundMatches[gn] || []).map(r => r ? [...r] : []);
+  });
+
+  // 남은 경기 수
+  function remaining(gn) {
+    return groupRounds[gn].reduce((s, r) => s + r.length, 0);
+  }
+  // 2경기 이상 남은 라운드 찾기 (공유 코트 사용 가능)
+  function findFullRound(gn) {
+    for (let r = 0; r < groupRounds[gn].length; r++) {
+      if (groupRounds[gn][r].length >= 2) return r;
+    }
+    return -1;
+  }
+  // 경기가 남은 첫 라운드
+  function findAnyRound(gn) {
+    for (let r = 0; r < groupRounds[gn].length; r++) {
+      if (groupRounds[gn][r].length > 0) return r;
+    }
+    return -1;
+  }
+  // 공유 코트 자격 조: 2경기 이상 라운드가 있는 조
+  function getEligible() {
+    return gNames.filter(gn => remaining(gn) > 0 && findFullRound(gn) >= 0);
+  }
+
+  let lastSharedGroup = null;
+  const times = [];
+  let safety = 0;
+
+  while (gNames.some(gn => remaining(gn) > 0) && safety < 200) {
+    const timeSlots = new Array(COURT_COUNT).fill(null);
+    const groupsWithShared = new Set();
+
+    // 공유 코트 배정: 교대 우선 (직전 사용 조를 뒤로)
+    const eligible = getEligible();
+    let sharedAssigned = 0;
+    const ordered = [...eligible];
+    if (lastSharedGroup) {
+      ordered.sort((a, b) => {
+        if (a === lastSharedGroup && b !== lastSharedGroup) return 1;
+        if (b === lastSharedGroup && a !== lastSharedGroup) return -1;
+        return 0;
+      });
+    }
+    for (const gn of ordered) {
+      if (sharedAssigned >= sharedCourtCount) break;
+      groupsWithShared.add(gn);
+      sharedAssigned++;
+      lastSharedGroup = gn;
+    }
+
+    // 각 조별 처리
+    for (let gi = 0; gi < dedicatedCourts; gi++) {
+      const gn = gNames[gi];
+      if (remaining(gn) === 0) continue;
+
+      if (groupsWithShared.has(gn)) {
+        // 공유 코트 사용: 같은 라운드 2경기를 동시에 (전용 코트 + 공유 코트)
+        const ri = findFullRound(gn);
+        if (ri >= 0) {
+          const round = groupRounds[gn][ri];
+          timeSlots[gi] = round[0];
+          for (let sc = 0; sc < sharedCourtCount; sc++) {
+            const ci = dedicatedCourts + sc;
+            if (timeSlots[ci] === null) {
+              timeSlots[ci] = round[1];
+              break;
+            }
+          }
+          groupRounds[gn][ri] = [];
+          continue;
+        }
+      }
+      // 공유 코트 미사용: 1경기만 진행 (부분 라운드 우선 → 새 라운드)
+      const ri = findAnyRound(gn);
+      if (ri >= 0) {
+        timeSlots[gi] = groupRounds[gn][ri][0];
+        groupRounds[gn][ri] = groupRounds[gn][ri].slice(1);
+      }
+    }
+
+    times.push(timeSlots);
+    safety++;
+  }
+
+  return times;
+}
+
+// ===== 코트 배정: 기존 알고리즘 (폴백) =====
+function buildCourtScheduleLegacy(groupRoundMatches, gNames) {
   const maxRounds = Math.max(...gNames.map(gn => groupRoundMatches[gn].length));
   const sequential = [];
   for (let r = 0; r < maxRounds; r++) {
     gNames.forEach(gn => {
       if (groupRoundMatches[gn][r]) {
-        groupRoundMatches[gn][r].forEach(entry => {
-          sequential.push(entry);
-        });
+        groupRoundMatches[gn][r].forEach(entry => sequential.push(entry));
       }
     });
   }
-
-  // 3. 타임별 배정 (2패스 그리디 + 휴식 추적)
-  // - 1패스: 이전 타임에 플레이하지 않은 팀 우선 배정
-  // - 2패스: 이전 타임에 플레이한 팀도 허용 (코트가 남으면)
-  // - 같은 타임 내 선수/팀 중복 불가
   const times = [];
   const remaining = [...sequential];
-  const lastPlayedTime = {}; // playerName → last time index
+  const lastPlayedTime = {};
   let safety = 0;
   while (remaining.length > 0 && safety < 200) {
     const timeMatches = [];
     const usedPlayers = new Set();
     const currentTimeIdx = times.length;
-
-    // 1패스: 이전 타임에 안 플레이한 팀 우선
     for (let i = 0; i < remaining.length; i++) {
       if (timeMatches.length >= COURT_COUNT) break;
       const m = remaining[i];
@@ -2222,7 +2404,6 @@ function buildCourtSchedule() {
         }
       }
     }
-    // 2패스: 이전 타임 플레이 팀도 허용
     for (let i = 0; i < remaining.length; i++) {
       if (timeMatches.length >= COURT_COUNT) break;
       const m = remaining[i];
@@ -2248,6 +2429,18 @@ function buildCourtSchedule() {
 function renderCourtSchedule() {
   const container = document.getElementById('leagueContainer');
   const times = buildCourtSchedule();
+  if (!times || times.length === 0) {
+    let emptyHtml = '<div class="group-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">';
+    emptyHtml += `<button class="btn btn-accent" onclick="switchGroupTab(-1)" style="min-width:120px;">📊 전체 코트 배정</button>`;
+    groups.forEach((g, gi) => {
+      const label = leagueMode === 'individual' ? `${gi + 1}조 (${g.length}명)` : `${gi + 1}조 (${getGroupTeams(gi).length}팀/${g.length}명)`;
+      emptyHtml += `<button class="btn btn-outline" onclick="switchGroupTab(${gi})" style="min-width:60px;">${label}</button>`;
+    });
+    emptyHtml += '</div>';
+    emptyHtml += '<div style="text-align:center;padding:40px;color:var(--text-light);">경기가 없습니다.</div>';
+    container.innerHTML = emptyHtml;
+    return;
+  }
   if (activeTimeTab >= times.length) activeTimeTab = 0;
   // 조 탭 버튼
   let tabHtml = '<div class="group-tabs" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">';
@@ -2276,8 +2469,18 @@ function renderCourtSchedule() {
   const ti = activeTimeTab;
   const timeMatches = times[ti];
   html += `<div class="time-label" style="margin-bottom:8px;">⏱ 타임 ${ti + 1}</div>`;
-  timeMatches.forEach((m, ci) => {
+  for (let ci = 0; ci < COURT_COUNT; ci++) {
+    const m = timeMatches[ci];
     const courtNum = ci + 1;
+    if (!m) {
+      html += `
+        <div style="border:2px dashed var(--border);border-radius:8px;padding:10px;margin:6px 0;background:var(--bg);opacity:0.7;">
+          <div style="font-weight:700;color:var(--text-light);margin-bottom:6px;">🏟 코트 ${courtNum}</div>
+          <div style="text-align:center;padding:8px;color:var(--text-light);font-style:italic;">🏸 자율 게임</div>
+        </div>
+      `;
+      continue;
+    }
     if (m.type === 'individual') {
       const result = individualMatchResults[m.gName]?.[m.mi] || { s1: '', s2: '' };
       const t1Win = result.s1 !== '' && result.s2 !== '' && parseInt(result.s1) > parseInt(result.s2);
@@ -2325,20 +2528,12 @@ function renderCourtSchedule() {
         </div>
       `;
     }
-  });
-  // 남은 코트는 자율 게임
-  for (let ci = timeMatches.length; ci < COURT_COUNT; ci++) {
-    html += `
-      <div style="border:2px dashed var(--border);border-radius:8px;padding:10px;margin:6px 0;background:var(--bg);opacity:0.7;">
-        <div style="font-weight:700;color:var(--text-light);margin-bottom:6px;">🏟 코트 ${ci + 1}</div>
-        <div style="text-align:center;padding:8px;color:var(--text-light);font-style:italic;">🏸 자율 게임</div>
-      </div>
-    `;
   }
   // 휴식팀/선수 표시 (개인/파트너 공통 — 이 타임에 경기가 없는 선수/팀)
   const restEntries = [];
   const groupsInTime = {};
   timeMatches.forEach(m => {
+    if (!m) return;
     if (!groupsInTime[m.gName]) groupsInTime[m.gName] = new Set();
     if (m.type === 'individual') {
       const match = m.match;
